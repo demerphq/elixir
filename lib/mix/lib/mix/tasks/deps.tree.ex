@@ -85,7 +85,13 @@ defmodule Mix.Tasks.Deps.Tree do
 
     if opts[:format] == "dot" do
       callback = callback(&format_dot/1, deps, opts)
-      Mix.Utils.write_dot_graph!("deps_tree.dot", "dependency tree", [root], callback, opts)
+
+      Mix.Utils.write_dot_graph!(
+        "dependency tree",
+        [root],
+        callback,
+        Keyword.put(opts, :output, "deps_tree.dot")
+      )
 
       """
       Generated "deps_tree.dot" in the current directory. To generate a PNG:

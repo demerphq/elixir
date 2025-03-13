@@ -859,6 +859,23 @@ defmodule Mix.Tasks.XrefTest do
                  "lib/b.ex"
                }
                """
+
+        assert Mix.Task.run("xref", ["graph", "--format", "json", "--output", "xref_graph.json"]) ==
+                 :ok
+
+        assert File.read!("xref_graph.json") ===
+                 String.trim_trailing("""
+                 {"lib/a.ex":{"lib/b.ex":"compile"},"lib/b.ex":{}}
+                 """)
+
+        assert Mix.Task.run("xref", ["graph", "--format", "json", "--output", "xref_graph.json"]) ==
+                 :ok
+
+        # test that we rename existing files to .bak as expected
+        assert File.read!("xref_graph.json.bak") ===
+                 String.trim_trailing("""
+                 {"lib/a.ex":{"lib/b.ex":"compile"},"lib/b.ex":{}}
+                 """)
       end)
     end
 
@@ -887,6 +904,14 @@ defmodule Mix.Tasks.XrefTest do
                  "lib/b.ex"
                }
                """
+
+        assert Mix.Task.run("xref", ["graph", "--format", "json", "--output", "xref_graph.json"]) ==
+                 :ok
+
+        assert File.read!("xref_graph.json") ===
+                 String.trim_trailing("""
+                 {"lib/a.ex":{"lib/b.ex":"export"},"lib/b.ex":{}}
+                 """)
       end)
     end
 
@@ -928,6 +953,16 @@ defmodule Mix.Tasks.XrefTest do
           defstruct []
         end
         """)
+
+        output =
+          capture_io(fn ->
+            assert Mix.Task.run("xref", ["graph", "--format", "json", "--output", "-"]) == :ok
+          end)
+
+        assert output ===
+                 String.trim_trailing("""
+                 {"lib/a.ex":{},"lib/b.ex":{}}
+                 """)
 
         output =
           capture_io(fn ->
@@ -980,6 +1015,14 @@ defmodule Mix.Tasks.XrefTest do
                  "lib/b.ex"
                }
                """
+
+        assert Mix.Task.run("xref", ["graph", "--format", "json"]) ==
+                 :ok
+
+        assert File.read!("xref_graph.json") ===
+                 String.trim_trailing("""
+                 {"lib/a.ex":{"lib/b.ex":"compile"},"lib/b.ex":{"lib/a.ex":"compile"}}
+                 """)
       end)
     end
 
@@ -1088,6 +1131,19 @@ defmodule Mix.Tasks.XrefTest do
       """)
     end
 
+    test "group with multiple unconnected files (json)" do
+      assert_graph_json(
+        ~w[--group lib/a.ex,lib/c.ex,lib/e.ex],
+        """
+        { "lib/a.ex+": { "lib/b.ex":  "compile",
+                         "lib/d.ex":  "compile" },
+          "lib/b.ex":  { "lib/a.ex+": "compile" },
+          "lib/d.ex":  { "lib/a.ex+": "runtime" } }
+        """,
+        strip_ws: true
+      )
+    end
+
     test "group with directly dependent files and cycle" do
       assert_graph(["--group", "lib/a.ex,lib/b.ex,"], """
       lib/a.ex+
@@ -1101,6 +1157,20 @@ defmodule Mix.Tasks.XrefTest do
       """)
     end
 
+    test "group with directly dependent files and cycle (json)" do
+      assert_graph_json(
+        ["--group", "lib/a.ex,lib/b.ex,"],
+        """
+        { "lib/a.ex+": { "lib/c.ex": "runtime",
+                         "lib/e.ex": "compile" },
+          "lib/c.ex":  { "lib/d.ex": "compile" },
+          "lib/d.ex":  { "lib/e.ex": "runtime" },
+          "lib/e.ex":  {} }
+        """,
+        strip_ws: true
+      )
+    end
+
     test "multiple groups" do
       assert_graph(~w[--group lib/a.ex,lib/b.ex --group lib/c.ex,lib/e.ex], """
       lib/a.ex+
@@ -1112,6 +1182,18 @@ defmodule Mix.Tasks.XrefTest do
       """)
     end
 
+    test "multiple groups (json)" do
+      assert_graph_json(
+        ~w[--group lib/a.ex,lib/b.ex --group lib/c.ex,lib/e.ex],
+        """
+        { "lib/a.ex+": { "lib/c.ex+": "compile"},
+          "lib/c.ex+": { "lib/d.ex":  "compile"},
+          "lib/d.ex":  { "lib/c.ex+": "runtime"} }
+        """,
+        strip_ws: true
+      )
+    end
+
     test "group with sink" do
       assert_graph(~w[--group lib/a.ex,lib/c.ex,lib/e.ex --sink lib/e.ex], """
       lib/b.ex
@@ -1121,6 +1203,68 @@ defmodule Mix.Tasks.XrefTest do
       lib/d.ex
       `-- lib/a.ex+
       """)
+    end
+
+    test "group with sink (json)" do
+      assert_graph_json(
+        ~w[--group lib/a.ex,lib/c.ex,lib/e.ex --sink lib/e.ex],
+        """
+        { "lib/a.ex+": { "lib/b.ex":  "compile",
+                         "lib/d.ex":  "compile" },
+          "lib/b.ex":  { "lib/a.ex+": "compile" },
+          "lib/d.ex":  { "lib/a.ex+": "runtime" } }
+        """,
+        strip_ws: true
+      )
+    end
+
+    @triple_cycle %{
+      "lib/a.ex" => """
+      defmodule A do
+        def a, do: :ok
+        B.b2()
+      end
+      """,
+      "lib/b.ex" => """
+      defmodule B do
+        def b1, do: C.c()
+        def b2, do: :ok
+      end
+      """,
+      "lib/c.ex" => """
+      defmodule C do
+        def c, do: A.a
+      end
+      """
+    }
+    test "triple cycle (dot)" do
+      assert_graph_dot(
+        ~w[],
+        """
+        digraph "xref graph" {
+          "lib/a.ex"
+          "lib/a.ex" -> "lib/b.ex" [label="(compile)"]
+          "lib/b.ex" -> "lib/c.ex"
+          "lib/c.ex" -> "lib/a.ex"
+          "lib/b.ex"
+          "lib/c.ex"
+        }
+        """,
+        files: @triple_cycle
+      )
+    end
+
+    test "triple cycle (json)" do
+      assert_graph_json(
+        ~w[],
+        """
+        {"lib/a.ex":{"lib/b.ex":"compile"},
+         "lib/b.ex":{"lib/c.ex":"runtime"},
+         "lib/c.ex":{"lib/a.ex":"runtime"}}
+        """,
+        strip_ws: true,
+        files: @triple_cycle
+      )
     end
 
     @default_files %{
@@ -1155,6 +1299,43 @@ defmodule Mix.Tasks.XrefTest do
       end
       """
     }
+
+    defp assert_graph_json(args, expected, opts) do
+      assert_graph_io("json", args, expected, opts)
+    end
+
+    defp assert_graph_dot(args, expected, opts) do
+      assert_graph_io("dot", args, expected, opts)
+    end
+
+    # note that we trim_trailing on expected and output
+    # we also support :strip_ws in opts, which removes all
+    # whitespace from expected (but not output!) before performing
+    # the test.
+    defp assert_graph_io(format, args, expected, opts) do
+      in_fixture("no_mixfile", fn ->
+        Enum.each(opts[:files] || @default_files, fn {path, content} ->
+          File.write!(path, content)
+        end)
+
+        output =
+          String.trim_trailing(
+            capture_io(fn ->
+              assert Mix.Task.run(
+                       "xref",
+                       args ++ ["graph", "--format", format, "--output", "-"]
+                     ) == :ok
+            end)
+          )
+
+        expected =
+          if opts[:strip_ws],
+            do: Regex.replace(~r/\s+/, expected, "", global: true),
+            else: String.trim_trailing(expected)
+
+        assert output === expected
+      end)
+    end
 
     defp assert_graph(args \\ [], expected, opts \\ []) do
       in_fixture("no_mixfile", fn ->
