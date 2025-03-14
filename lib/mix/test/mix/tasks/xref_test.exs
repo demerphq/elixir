@@ -498,8 +498,8 @@ defmodule Mix.Tasks.XrefTest do
 
       Cycle of length 2:
 
-          lib/b.ex (compile)
-          lib/a.ex
+          lib/a.ex (compile)
+          lib/b.ex
 
       """)
     end
@@ -510,8 +510,8 @@ defmodule Mix.Tasks.XrefTest do
 
       Cycle of length 2:
 
-          lib/b.ex (compile)
-          lib/a.ex
+          lib/a.ex (compile)
+          lib/b.ex
 
       """)
     end
@@ -522,8 +522,8 @@ defmodule Mix.Tasks.XrefTest do
 
       Cycle of length 2:
 
-          lib/b.ex (compile)
-          lib/a.ex
+          lib/a.ex (compile)
+          lib/b.ex
 
       """)
     end
