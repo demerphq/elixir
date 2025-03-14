@@ -501,7 +501,9 @@ defmodule Kernel.CLI do
 
           verbose_opts =
             if config.verbose_compile do
-              [each_file: &IO.puts("Compiling #{Path.relative_to_cwd(&1)}")]
+              [
+                each_file: &IO.puts("Compiling #{Path.relative_to_cwd(&1)}")
+              ]
             else
               [
                 each_long_compilation:

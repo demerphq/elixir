@@ -1223,9 +1223,22 @@ defmodule Mix.Tasks.Xref do
   defp cycle_filter_fn(:compile_connected), do: cycle_filter_fn(:compile)
   defp cycle_filter_fn(filter), do: fn {_node, type} -> type == filter end
 
-  defp add_labels(vertices, graph) do
+  defp old_add_labels(vertices, graph) do
     vertices
     |> Enum.map(fn v -> {v, cycle_label(vertices, graph, v, false)} end)
+    |> Enum.sort()
+  end
+
+  defp add_labels(vertices, graph) do
+    set = MapSet.new(vertices)
+
+    vertices
+    |> Enum.map(fn v ->
+      {v,
+       :digraph.out_neighbours(graph, v)
+       |> Enum.filter(&(&1 in set))
+       |> cycle_label(graph, v, false)}
+    end)
     |> Enum.sort()
   end
 
